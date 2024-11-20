@@ -2,7 +2,7 @@ matplotlib
 seaborn
 openpyxl
 matplotlib.pyplot
-sklearn
+scikit-learn
 sklearn.model_selection
 sklearn.linear_model
 sklearn.ensemble
