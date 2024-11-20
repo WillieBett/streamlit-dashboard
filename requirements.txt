@@ -1,3 +1,8 @@
 matplotlib
 seaborn
 openpyxl
+matplotlib.pyplot
+sklearn.model_selection
+sklearn.linear_model
+sklearn.ensemble
+sklearn.metrics
