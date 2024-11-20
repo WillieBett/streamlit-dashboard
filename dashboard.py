@@ -1,16 +1,21 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import mean_squared_error, accuracy_score
 
-# Streamlit Dashboard
-st.title("Exploratory Data Analysis (EDA) Dashboard")
+# Streamlit App Title
+st.title("Enhanced CSV/Excel Data Analytics Dashboard with ML Models")
 
-# File Uploader
+# Upload File
 uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file:
-    # Load the dataset
+    # Read the file
     try:
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
@@ -19,45 +24,57 @@ if uploaded_file:
 
         st.success("File uploaded successfully!")
 
-        # Dataset Overview
+        # Display Dataframe
         st.subheader("Dataset Preview")
         st.write(df.head())
 
-        # Dataset Information
+        # Basic Dataset Information
         st.subheader("Dataset Information")
         st.write(f"**Rows:** {df.shape[0]}, **Columns:** {df.shape[1]}")
-        st.write("**Column Data Types:**")
-        st.write(df.dtypes)
+        st.write(df.describe(include='all').T)
 
-        # Missing Values
-        st.subheader("Missing Values")
-        st.write(df.isnull().sum())
+        # Missing Values Analysis
+        st.subheader("Missing Values Analysis")
+        missing_values = df.isnull().sum()
+        st.write(missing_values[missing_values > 0])
 
-        # Summary Statistics
-        st.subheader("Summary Statistics")
-        st.write(df.describe())
+        if st.checkbox("Handle Missing Data"):
+            method = st.selectbox("Choose a method", ["Drop rows", "Fill with mean", "Fill with median"])
+            if method == "Drop rows":
+                df = df.dropna()
+            elif method == "Fill with mean":
+                df = df.fillna(df.mean())
+            elif method == "Fill with median":
+                df = df.fillna(df.median())
+            st.success("Missing values handled!")
 
-        # Unique Value Counts
-        st.subheader("Unique Value Counts")
-        st.write({col: df[col].nunique() for col in df.columns})
-
-        # Select Columns for Visualizations
-        st.subheader("Select Columns for Visualizations")
+        # Numeric and Categorical Columns
         numeric_columns = df.select_dtypes(include="number").columns.tolist()
-        categorical_columns = df.select_dtypes(include=["object", "category"]).columns.tolist()
+        categorical_columns = df.select_dtypes(include="object").columns.tolist()
 
+        # Visualization Options
+        st.subheader("Data Visualizations")
         if numeric_columns:
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_x = st.selectbox("X-axis (Numeric)", numeric_columns)
-            with col2:
-                selected_y = st.selectbox("Y-axis (Numeric)", numeric_columns)
+            # Distribution Plots
+            selected_dist_col = st.selectbox("Select Numeric Column for Distribution", numeric_columns)
+            if selected_dist_col:
+                fig, ax = plt.subplots()
+                sns.histplot(df[selected_dist_col], kde=True, ax=ax)
+                st.pyplot(fig)
 
             # Scatter Plot
-            st.subheader("Scatter Plot")
-            fig, ax = plt.subplots()
-            sns.scatterplot(data=df, x=selected_x, y=selected_y, ax=ax)
-            st.pyplot(fig)
+            if len(numeric_columns) > 1:
+                col1, col2 = st.columns(2)
+                with col1:
+                    selected_x = st.selectbox("X-axis", numeric_columns)
+                with col2:
+                    selected_y = st.selectbox("Y-axis", numeric_columns)
+
+                if selected_x and selected_y:
+                    st.subheader("Scatter Plot")
+                    fig, ax = plt.subplots()
+                    sns.scatterplot(data=df, x=selected_x, y=selected_y, ax=ax)
+                    st.pyplot(fig)
 
             # Correlation Heatmap
             st.subheader("Correlation Heatmap")
@@ -66,32 +83,57 @@ if uploaded_file:
             st.pyplot(fig)
 
         if categorical_columns:
-            selected_cat = st.selectbox("Select a Categorical Column", categorical_columns)
+            # Bar Chart for Categorical Columns
+            selected_cat_col = st.selectbox("Select Categorical Column for Bar Chart", categorical_columns)
+            if selected_cat_col:
+                fig, ax = plt.subplots()
+                df[selected_cat_col].value_counts().plot(kind='bar', ax=ax)
+                st.pyplot(fig)
 
-            # Bar Plot
-            st.subheader("Bar Plot")
-            fig, ax = plt.subplots()
-            df[selected_cat].value_counts().plot(kind='bar', ax=ax)
-            plt.title(f"Bar Plot for {selected_cat}")
-            plt.ylabel("Frequency")
-            st.pyplot(fig)
+        # Outlier Detection
+        st.subheader("Outlier Detection")
+        selected_outlier_col = st.selectbox("Select Numeric Column for Outlier Analysis", numeric_columns)
+        if selected_outlier_col:
+            Q1 = df[selected_outlier_col].quantile(0.25)
+            Q3 = df[selected_outlier_col].quantile(0.75)
+            IQR = Q3 - Q1
+            outliers = df[(df[selected_outlier_col] < (Q1 - 1.5 * IQR)) | (df[selected_outlier_col] > (Q3 + 1.5 * IQR))]
+            st.write(f"Outliers in {selected_outlier_col}:")
+            st.write(outliers)
 
-        # Pair Plot
-        if st.checkbox("Show Pair Plot"):
-            st.subheader("Pair Plot")
-            fig = sns.pairplot(df[numeric_columns])
-            st.pyplot(fig)
+        # Export Processed Data
+        st.subheader("Export Processed Data")
+        if st.button("Download Processed Dataset"):
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, "processed_data.csv", "text/csv")
 
-        # Distribution Plot
-        if numeric_columns:
-            selected_num = st.selectbox("Select a Numeric Column for Distribution", numeric_columns)
-            st.subheader("Distribution Plot")
-            fig, ax = plt.subplots()
-            sns.histplot(df[selected_num], kde=True, ax=ax)
-            plt.title(f"Distribution of {selected_num}")
-            st.pyplot(fig)
+        # Machine Learning Models
+        st.subheader("Train a Machine Learning Model")
+        target_column = st.selectbox("Select Target Column", df.columns)
+
+        if target_column:
+            features = df.drop(columns=[target_column])
+            target = df[target_column]
+
+            # Split Data
+            X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
+
+            if target.dtypes == 'object':
+                # Classification Model
+                st.write("Training a Random Forest Classifier...")
+                model = RandomForestClassifier()
+                model.fit(X_train, y_train)
+                predictions = model.predict(X_test)
+                accuracy = accuracy_score(y_test, predictions)
+                st.write(f"**Accuracy:** {accuracy:.2f}")
+            else:
+                # Regression Model
+                st.write("Training a Linear Regression Model...")
+                model = LinearRegression()
+                model.fit(X_train, y_train)
+                predictions = model.predict(X_test)
+                mse = mean_squared_error(y_test, predictions)
+                st.write(f"**Mean Squared Error:** {mse:.2f}")
 
     except Exception as e:
         st.error(f"Error: {e}")
-else:
-    st.info("Please upload a CSV or Excel file.")
