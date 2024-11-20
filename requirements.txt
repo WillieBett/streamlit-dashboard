@@ -1,7 +1,6 @@
 matplotlib
 seaborn
 openpyxl
-matplotlib.pyplot
 scikit-learn
 sklearn.model_selection
 sklearn.linear_model
